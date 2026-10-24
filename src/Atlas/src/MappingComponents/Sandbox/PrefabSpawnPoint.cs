@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using FistVR;
@@ -37,6 +37,9 @@ namespace Atlas.MappingComponents.Sandbox
 
         private IEnumerator Start()
         {
+#if NATIVEH3VR
+            if (AtlasPlugin.IsAuthoringPreview) yield break;
+#endif
             // Wait until the objects are cached
             while (!ObjectsCached) yield return null;
 

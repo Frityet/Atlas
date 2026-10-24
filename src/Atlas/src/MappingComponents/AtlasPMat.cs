@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using FistVR;
 using UnityEngine;
 
@@ -19,7 +19,10 @@ namespace Atlas.MappingComponents
         
         private void Awake()
         {
-            if (!MatDef) MatDef = Resources.Load<MatDef>(MatDefResources[AtlasMatDef]);
+#if NATIVEH3VR
+            if (AtlasPlugin.IsAuthoringPreview) return;
+#endif
+            if (!MatDef) MatDef = Resources.Load<MatDef>(MatDefResources[AtlasMatDef].Replace('\\', '/'));
         }
 
         #region MatDef

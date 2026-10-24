@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using FistVR;
 using UnityEngine;
 
@@ -38,6 +38,9 @@ namespace Atlas.MappingComponents.Sandbox
 
         private IEnumerator SpawnAsync()
         {
+#if NATIVEH3VR
+            if (AtlasPlugin.IsAuthoringPreview) yield break;
+#endif
             // Get the object and wait for it to load
             if (!IM.OD.TryGetValue(ObjectId, out var obj))
             {

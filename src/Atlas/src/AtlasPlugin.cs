@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Atlas.Loaders;
+#if !NATIVEH3VR
 using BepInEx;
 using BepInEx.Logging;
+#endif
 using FistVR;
 using Sodalite;
 using UnityEngine;
@@ -38,14 +40,23 @@ namespace Atlas
         internal const string LoaderTakeAndHold = "takeandhold";
     }
 
+#if !NATIVEH3VR
     [BepInPlugin(AtlasConstants.Guid, AtlasConstants.Name, AtlasConstants.Version)]
     [BepInDependency(SodaliteConstants.Guid, SodaliteConstants.Version)]
     [BepInProcess("h3vr.exe")]
     public partial class AtlasPlugin : BaseUnityPlugin
+#else
+    public partial class AtlasPlugin : MonoBehaviour
+#endif
     {
         #region Plugin stuff
 
+#if NATIVEH3VR
+        internal static NativeLogger Logger = new("Atlas");
+        public static bool IsAuthoringPreview => Application.isEditor;
+#else
         internal new static ManualLogSource Logger = null!;
+#endif
         internal static AtlasPlugin Instance = null!;
         internal static IDisposable? LeaderboardLock;
         internal static CustomSceneInfo? LastLoadedScene;
@@ -53,9 +64,9 @@ namespace Atlas
         public void Awake()
         {
             // Setup our logger
+#if !NATIVEH3VR
             Logger = base.Logger;
-            Instance = this;
-
+#endif
             // Apply our hooks
             ApplyHooks();
 
@@ -64,7 +75,18 @@ namespace Atlas
             Loaders[AtlasConstants.LoaderTakeAndHold] = new TakeAndHoldLoader();
 
             // Callback for when a scene is loaded
-            SceneManager.sceneLoaded += (scene, _) => StartCoroutine(SceneManagerOnSceneLoaded(scene));
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            Instance = this;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode) => StartCoroutine(SceneManagerOnSceneLoaded(scene));
+
+        private void OnDestroy()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+#if NATIVEH3VR
+            RemoveHooks();
+#endif
         }
 
         private IEnumerator SceneManagerOnSceneLoaded(Scene scene)
@@ -73,6 +95,12 @@ namespace Atlas
             if (scene.name != "MainMenu3") yield break;
             GameObject sceneScreenBase = GameObject.Find("SceneScreen_GDC");
             GameObject labelBase = GameObject.Find("Label_Description_1_Title (5)");
+
+            if (!sceneScreenBase || !labelBase)
+            {
+                Logger.LogWarning("Main menu scene selector template was not found.");
+                yield break;
+            }
 
             // Get a circle.
             List<Vector3> screenPositions = new();
@@ -99,7 +127,7 @@ namespace Atlas
             CustomSceneInfo[] sandboxScenes =
                 RegisteredScenes.Where(x => x.DisplayMode == AtlasConstants.LoaderSandbox).ToArray();
             int mainTex = Shader.PropertyToID("_MainTex");
-            for (int i = 0; i < sandboxScenes.Length; i++)
+            for (int i = 0; i < sandboxScenes.Length && i < screenPositions.Count; i++)
             {
                 // Create and position properly. Rename so patch can handle it properly.
                 MainMenuScenePointable screen = Instantiate(sceneScreenBase, sceneScreenBase.transform.parent)
@@ -111,7 +139,11 @@ namespace Atlas
 
                 // Make sure scaling is set correctly.
                 MainMenuScenePointable screenComponent = screen.GetComponent<MainMenuScenePointable>();
+#if NATIVEH3VR
+                HarmonyLib.AccessTools.Field(typeof(MainMenuScenePointable), "m_startScale").SetValue(screenComponent, screen.transform.localScale);
+#else
                 screenComponent.m_startScale = screen.transform.localScale;
+#endif
 
                 // Setup the screen with our values
                 CustomSceneInfo sceneInfo = sandboxScenes[i];
@@ -162,6 +194,8 @@ namespace Atlas
 
             // Add a new scene info to our list
             CustomSceneInfo info = new(file);
+            if (RegisteredScenes.Any(x => x.Identifier == info.Identifier))
+                throw new InvalidDataException("Duplicate Atlas scene identifier: " + info.Identifier);
             RegisteredScenes.Add(info);
             Logger.LogInfo($"Registered {info.DisplayName} by {info.Author}.");
         }
@@ -189,11 +223,14 @@ namespace Atlas
                 
                 // Get the bundle and assign it
                 sceneInfo.SceneBundle = request.assetBundle;
+                if (!sceneInfo.SceneBundle) throw new InvalidDataException("Unable to load Atlas scene bundle: " + sceneInfo.SceneBundleFile.FullName);
             }
             
             // Use the SteamVR loading stuff because it's better
             LastLoadedScene = sceneInfo;
-            string sceneName = sceneInfo.SceneBundle!.GetAllScenePaths()[0];
+            string[] scenePaths = sceneInfo.SceneBundle!.GetAllScenePaths();
+            if (scenePaths.Length != 1) throw new InvalidDataException("Atlas bundles must contain exactly one scene.");
+            string sceneName = scenePaths[0];
             SteamVR_LoadLevel.Begin(sceneName);
         }
 

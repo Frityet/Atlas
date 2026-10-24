@@ -1,4 +1,5 @@
-﻿using System.IO;
+using System;
+using System.IO;
 using UnityEngine;
 using Valve.Newtonsoft.Json;
 
@@ -60,6 +61,9 @@ namespace Atlas
         /// </summary>
         public Sprite? ThumbnailSprite { get; }
         
+        [JsonProperty] public string UnityVersion { get; private set; } = "";
+        [JsonProperty] public string BuildTarget { get; private set; } = "";
+
         // The file pointer to the scene bundle
         internal FileInfo SceneBundleFile { get; }
         
@@ -76,6 +80,18 @@ namespace Atlas
             if (!sceneJsonFile.Exists) throw new FileNotFoundException(sceneJsonFile.Name + " is missing! It should be beside the scene bundle file.");
             JsonConvert.PopulateObject(File.ReadAllText(sceneJsonFile.FullName), this);
             
+            if (string.IsNullOrWhiteSpace(Identifier) || Identifier.Length > 16 || string.IsNullOrWhiteSpace(DisplayName))
+                throw new InvalidDataException("Atlas metadata requires a display name and an identifier of 1-16 characters.");
+            if (string.IsNullOrEmpty(GameMode)) GameMode = DisplayMode;
+#if NATIVEH3VR
+            if (UnityVersion != Application.unityVersion)
+                throw new InvalidDataException("Map Unity version " + UnityVersion + " does not match " + Application.unityVersion);
+            string expectedTarget = Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.OSXEditor
+                ? "StandaloneOSX" : Application.platform == RuntimePlatform.WindowsPlayer || Application.platform == RuntimePlatform.WindowsEditor
+                ? "StandaloneWindows64" : "StandaloneLinux64";
+            if (BuildTarget != expectedTarget) throw new InvalidDataException("Map target " + BuildTarget + " does not match " + expectedTarget);
+#endif
+
             // Missing thumbnail file is non-fatal but we still want to let the user know.
             if (!thumbnailFile.Exists) AtlasPlugin.Logger.LogWarning($"No {thumbnailFile.Name} was found. This scene will not have a thumbnail.");
             else

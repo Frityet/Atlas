@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using FistVR;
 using Sodalite.Api;
 using UnityEngine;
@@ -36,6 +36,9 @@ namespace Atlas.MappingComponents.Sandbox
         /// <summary>Spawns the Sosig with the configured options.</summary>
         public void Spawn()
         {
+#if NATIVEH3VR
+            if (AtlasPlugin.IsAuthoringPreview) return;
+#endif
             // Construct the spawn options struct
             SosigAPI.SpawnOptions options = new()
             {

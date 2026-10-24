@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using FistVR;
 using UnityEngine;
 
@@ -11,9 +11,26 @@ namespace Atlas.MappingComponents.Sandbox
     {
         private IEnumerator Start()
         {
+#if NATIVEH3VR
+            if (AtlasPlugin.IsAuthoringPreview) yield break;
+#endif
+            yield return PlacePlayer();
+        }
+
+        // Keep game-only type resolution out of the editor preview's coroutine.
+        private IEnumerator PlacePlayer()
+        {
             // Wait one frame so everything is all setup
             yield return null;
-            GM.CurrentMovementManager.TeleportToPoint(transform.position, true, transform.position + transform.forward);
+#if NATIVEH3VR
+            float deadline = Time.realtimeSinceStartup + 30;
+            while (!GM.CurrentMovementManager || !GM.CurrentPlayerBody)
+            {
+                if (Time.realtimeSinceStartup > deadline) throw new System.TimeoutException("Atlas player initialization timed out.");
+                yield return null;
+            }
+#endif
+            GM.CurrentMovementManager.TeleportToPoint(transform.position, true, transform.forward);
         }
 
         private void OnDrawGizmos()

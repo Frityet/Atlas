@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using FistVR;
 using UnityEngine;
@@ -160,12 +160,19 @@ namespace Atlas.MappingComponents
 
         private void Awake()
         {
+#if NATIVEH3VR
+            if (AtlasPlugin.IsAuthoringPreview) return;
+#endif
             // Update the current scene
             AtlasPlugin.CurrentScene = AtlasPlugin.LastLoadedScene;
 
             // Query our game mode from the AtlasPlugin.
             // This may already be set, in which case we definitely do not want to overwrite it.
-            if (string.IsNullOrEmpty(GameMode)) GameMode = AtlasPlugin.CurrentScene!.GameMode;
+            if (string.IsNullOrEmpty(GameMode))
+            {
+                if (AtlasPlugin.CurrentScene == null) throw new System.InvalidOperationException("Load this map through Atlas, or use the editor preview.");
+                GameMode = AtlasPlugin.CurrentScene.GameMode;
+            }
 
             // Let the scene loader for this game mode take over
             AtlasPlugin.Loaders[GameMode].Awake();
@@ -183,6 +190,9 @@ namespace Atlas.MappingComponents
 
         private IEnumerator Start()
         {
+#if NATIVEH3VR
+            if (AtlasPlugin.IsAuthoringPreview) yield break;
+#endif
             // Wait one frame for everything to get setup and then let the scene loader take over
             yield return null;
             yield return AtlasPlugin.Loaders[GameMode].Start();
